@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -11,13 +10,22 @@ import './styles/global.css';
  * [ X ] Validação / transformação
  * [ X ] Field arrays
  * [ X ] Upload de arquivos
- * [ ] Coomposition Pattern
+ * [ X ] Composition Pattern
  */
+
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5mb
+const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
 const createUserFormSchema = z.object({
   avatar: z.instanceof(FileList)
-    .transform(list => list.item(0)!)
-    .refine(file => file!.size <= 5 * 1024 * 1024, 'O arquivo precisa ter no máximo 5 megabytes'),
+    .refine((files) => !!files.item(0), "A imagem de perfil é obrigatória")
+    .refine((files) => files.item(0) !== null && files.item(0)!.size <= MAX_FILE_SIZE, `Tamanho máximo de 5MB`)
+    .refine(
+      (files) => files.item(0) !== null && ACCEPTED_IMAGE_TYPES.includes(files.item(0)!.type),
+      "Formato de imagem inválido"
+    ).transform(files => {
+      return files.item(0)!
+    }),
   name: z.string()
     .nonempty('O nome é obrigatório')
     .transform(name => {
@@ -48,8 +56,6 @@ const createUserFormSchema = z.object({
 type CreateUserFormData = z.infer<typeof createUserFormSchema>;
 
 export default function App() {
-  const [output, setOutput] = useState('');
-
   const {
     register,
     handleSubmit,
@@ -65,12 +71,14 @@ export default function App() {
   });
 
   async function createUser(data: CreateUserFormData) {
-    await supabase.storage.from('form-react').upload(
+    const { data: uploadData, error } = await supabase.storage.from('form-react').upload(
       data.avatar.name,
       data.avatar
     );
 
-    setOutput(JSON.stringify(data, null, 2));
+    console.log(uploadData);
+    console.log(error);
+    console.log(data);
   }
 
   function addNewTech() {
@@ -210,10 +218,6 @@ export default function App() {
           Salvar
         </button>
       </form>
-
-      {
-        output && <pre>{output}</pre>
-      }
     </main >
   )
 }

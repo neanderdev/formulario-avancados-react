@@ -3,16 +3,21 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 
+import { supabase } from './lib/supabase';
+
 import './styles/global.css';
 
 /** TO-DO
  * [ X ] Validação / transformação
  * [ X ] Field arrays
- * [ ] Upload de arquivos
+ * [ X ] Upload de arquivos
  * [ ] Coomposition Pattern
  */
 
 const createUserFormSchema = z.object({
+  avatar: z.instanceof(FileList)
+    .transform(list => list.item(0)!)
+    .refine(file => file!.size <= 5 * 1024 * 1024, 'O arquivo precisa ter no máximo 5 megabytes'),
   name: z.string()
     .nonempty('O nome é obrigatório')
     .transform(name => {
@@ -34,7 +39,10 @@ const createUserFormSchema = z.object({
       .number()
       .min(1, 'No mínimo 1')
       .max(100, 'No máximo 100 caracteres'),
-  })).min(2, 'Insira pelo menos 2 tecnologias'),
+  })).min(2, 'Insira pelo menos 2 tecnologias')
+    .refine(techs => {
+      return techs.some(tech => tech.knowledge > 50)
+    }, 'Você está aprendendo!'),
 });
 
 type CreateUserFormData = z.infer<typeof createUserFormSchema>;
@@ -56,7 +64,12 @@ export default function App() {
     name: 'techs',
   });
 
-  function createUser(data: any) {
+  async function createUser(data: CreateUserFormData) {
+    await supabase.storage.from('form-react').upload(
+      data.avatar.name,
+      data.avatar
+    );
+
     setOutput(JSON.stringify(data, null, 2));
   }
 
@@ -73,6 +86,22 @@ export default function App() {
         className='flex flex-col gap-4 w-full max-w-sm'
         onSubmit={handleSubmit(createUser)}
       >
+        <div className='flex flex-col gap-1'>
+          <label htmlFor='avatar'>
+            Avatar
+          </label>
+
+          <input
+            type='file'
+            accept='image/*'
+            {...register('avatar')}
+          />
+
+          {
+            errors.avatar && <span className='text-red-500 text-sm'>{errors.avatar.message}</span>
+          }
+        </div>
+
         <div className='flex flex-col gap-1'>
           <label htmlFor='name'>
             Nome
